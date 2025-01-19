@@ -1,22 +1,29 @@
 #include <Arduino.h>
 
 // ==================== PIN CONFIGURATION ====================
-// Arduino board pins for motor control
-#define PWM_PIN 6          // PWM pin to control motor speed
-#define DIR_PIN_1 7        // Direction pin (direction 1)
-#define DIR_PIN_2 8        // Direction pin (direction 2)
+#define PWM_PIN 16          // PWM pin to control motor speed
+#define DIR_PIN_1 17        // Direction pin (direction 1)
+#define DIR_PIN_2 18        // Direction pin (direction 2)
+
+// ==================== PWM CONFIGURATION ====================
+#define PWM_CHANNEL 0       // LEDC channel (0-15)
+#define PWM_FREQ 5000       // Frequency in Hz
+#define PWM_RESOLUTION 10   // Resolución de 10 bits (0-1023)
 
 // ==================== GLOBAL VARIABLES ====================
-// Duty cycle values for speed control (0-255)
-const int SPEED_LOW = 150;  // Low motor speed
-const int SPEED_HIGH = 250; // High motor speed
-
+const int SPEED = 100;  // Low motor speed (PWM duty cycle)8
 // ==================== INITIAL CONFIGURATION ====================
 void setup() {
-  // Set pins as outputs
-  pinMode(PWM_PIN, OUTPUT);
+  // Configure direction pins as outputs
   pinMode(DIR_PIN_1, OUTPUT);
   pinMode(DIR_PIN_2, OUTPUT);
+
+  // Configure the PWM pin using LEDC
+  ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
+  ledcAttachPin(PWM_PIN, PWM_CHANNEL);
+
+  Serial.begin(115200);
+  Serial.println("Motor control initialized");
 }
 
 // ==================== FUNCTION TO CONTROL THE MOTOR ====================
@@ -25,21 +32,24 @@ void setup() {
  *
  * @param dir1 State of direction pin 1 (HIGH or LOW)
  * @param dir2 State of direction pin 2 (HIGH or LOW)
- * @param speed Motor speed (PWM value between 0 and 255)
+ * @param speed Motor speed (PWM duty cycle between 0 and 255)
  */
 void controlMotor(bool dir1, bool dir2, int speed) {
-  digitalWrite(DIR_PIN_1, dir1);  // Set direction on pin 1
-  digitalWrite(DIR_PIN_2, dir2);  // Set direction on pin 2
-  analogWrite(PWM_PIN, speed);    // Set speed using PWM
+  speed = constrain(speed, 0, 1023); // Limita el valor de speed
+  digitalWrite(DIR_PIN_1, dir1);  
+  digitalWrite(DIR_PIN_2, dir2);
+  ledcWrite(PWM_CHANNEL, speed);
 }
 
 // ==================== MAIN LOOP ====================
 void loop() {
   // Direction 1: Rotate in one direction at low speed
-  controlMotor(HIGH, LOW, SPEED_LOW);
+  Serial.println("Rotating in direction 1 at low speed");
+  controlMotor(HIGH, LOW, SPEED);
   delay(3000); // Maintain this state for 3 seconds
 
   // Direction 2: Rotate in the opposite direction at high speed
-  controlMotor(LOW, HIGH, SPEED_HIGH);
+  Serial.println("Rotating in direction 2 at high speed");
+  controlMotor(LOW, HIGH, SPEED);
   delay(3000); // Maintain this state for 3 seconds
 }
