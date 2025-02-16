@@ -21,61 +21,59 @@ void setupPulseCounter(Motor &motor) {
     pcnt_counter_resume(motor.pcntUnit);
 }
 
-float calculatePID(PID &pid, float currentSpeed) {
-    float error = pid.setpoint - currentSpeed;
+float controlPID(PID &pid, float feedback) {
+    int controlSignal = 0;
+    float error = pid.setpoint - feedback;
     pid.accumulatedError += error;
     float derivative = error - pid.previousError;
     pid.previousError = error;
 
+    controlSignal = pid.kp * error + pid.ki * pid.accumulatedError + pid.kd * derivative;
+
     // Debugging prints
-    Serial.print("Reference Speed: ");
+    Serial.print("Reference: ");
     Serial.println(pid.setpoint);
-    Serial.print("Current Speed: ");
-    Serial.println(currentSpeed);
-    Serial.print("Error: ");
+    Serial.print("Feedback: ");
+    Serial.println(feedback);
+    Serial.print("Current Error: ");
     Serial.println(error);
     Serial.print("Accumulated Error: ");
     Serial.println(pid.accumulatedError);
-    Serial.print("Derivative: ");
+    Serial.print("Derivative Error: ");
     Serial.println(derivative);
-    Serial.print("PID output: ");
-    Serial.println(pid.kp * error + pid.ki * pid.accumulatedError + pid.kd * derivative);
+    Serial.print("Control Signal: ");
+    Serial.println(controlSignal);
 
-    return pid.kp * error + pid.ki * pid.accumulatedError + pid.kd * derivative;
+    return controlSignal;
 }
 
-void controlMotor(Motor &motor, bool dir1, bool dir2, int speed) {
+void moveMotor(Motor &motor, bool dir1, bool dir2, int speed) {
     digitalWrite(motor.dirPin1, dir1);
     digitalWrite(motor.dirPin2, dir2);
-    Serial.print("Final speed: ");
+    Serial.print("Final Control Signal: ");
     Serial.println(speed);
     ledcWrite(motor.pwmChannel, speed);
 }
 
-void calculateSpeed(Motor &motor) {
-    static unsigned long lastTime = 0;
+// Measure the speed of the motor
+void measureSpeed(Motor &motor) {
     unsigned long currentTime = millis();
-
-    if (currentTime - lastTime >= 100) { // Update every 100ms
-        pcnt_get_counter_value(motor.pcntUnit, (int16_t*)&motor.encoderPosition);
-        motor.motorSpeed = (motor.encoderPosition - motor.lastEncoderPosition) / ((currentTime - lastTime) / 1000.0);
-        motor.lastEncoderPosition = motor.encoderPosition;
-        lastTime = currentTime;
-    }
+    pcnt_get_counter_value(motor.pcntUnit, (int16_t*)&motor.encoderPosition);
+    motor.motorSpeed = (motor.encoderPosition - motor.lastEncoderPosition) / ((currentTime - motor.lastMeasurementTime) / 1000.0);
+    motor.lastEncoderPosition = motor.encoderPosition;
+    motor.lastMeasurementTime = currentTime;
 }
 
 void controlSpeedMotor(Motor &motor, int targetSpeed) {
     motor.pid.setpoint = targetSpeed;
 
-    calculateSpeed(motor);
-    float pidOutput = calculatePID(motor.pid, motor.motorSpeed);
-    pidOutput = constrain(abs(pidOutput), motor.minPWM, motor.maxPWM);
+    measureSpeed(motor);
+    float controlSignal = controlPID(motor.pid, motor.motorSpeed);
+    controlSignal = constrain(abs(controlSignal), motor.minPWM, motor.maxPWM);
 
-    if (pidOutput < 0) {
-        controlMotor(motor, HIGH, LOW, pidOutput); // Forward direction
+    if (controlSignal < 0) {
+        moveMotor(motor, HIGH, LOW, controlSignal); // Forward direction
     } else {
-        controlMotor(motor, LOW, HIGH, pidOutput); // Reverse direction
+        moveMotor(motor, LOW, HIGH, controlSignal); // Reverse direction
     }
-
-    delay(100);
 }

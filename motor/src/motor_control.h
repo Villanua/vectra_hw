@@ -52,18 +52,15 @@ struct Motor {
     volatile int16_t encoderPosition;
     int16_t lastEncoderPosition;
     float motorSpeed;
+    unsigned long lastMeasurementTime;
     PID pid;
-
-    // Constructor
-    Motor(int dp1, int dp2, int pp, int pc, int epA, int epB, pcnt_unit_t pu, PID p, int minP, int maxP)
-        : dirPin1(dp1), dirPin2(dp2), pwmPin(pp), pwmChannel(pc), encoderPinA(epA), encoderPinB(epB), pcntUnit(pu), encoderPosition(0), lastEncoderPosition(0), motorSpeed(0), pid(p), minPWM(minP), maxPWM(maxP) {}
 };
 
 // Function declarations
 void setupPulseCounter(Motor &motor);
-float calculatePID(PID &pid, float currentSpeed);
-void controlMotor(Motor &motor, bool dir1, bool dir2, int speed);
-void calculateSpeed(Motor &motor);
+float controlPID(PID &pid, float currentSpeed);
+void moveMotor(Motor &motor, bool dir1, bool dir2, int speed);
+void measureSpeed(Motor &motor);
 void controlSpeedMotor(Motor &motor, int targetSpeed);
 
 #endif // MOTOR_CONTROL_H
