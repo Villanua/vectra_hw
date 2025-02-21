@@ -1,5 +1,19 @@
 #include "motor_control.h"
 
+void IRAM_ATTR pcntOverflowHandler(void *arg) {
+    Motor *motor = (Motor *)arg;
+    uint32_t status = 0;
+    pcnt_get_event_status(motor->pcntUnit, &status);
+
+    if (status & PCNT_EVT_H_LIM) {
+        motor->encoderPosition += 32767;
+        motor->lastEncoderPosition -= 32767;
+    } else if (status & PCNT_EVT_L_LIM) {
+        motor->encoderPosition -= 32767;
+        motor->lastEncoderPosition += 32767;
+    }
+}
+
 void setupPulseCounter(Motor &motor) {
     pcnt_config_t pcntConfig = {};
     pcntConfig.pulse_gpio_num = motor.encoderPinA;
@@ -19,6 +33,13 @@ void setupPulseCounter(Motor &motor) {
     pcnt_counter_pause(motor.pcntUnit);
     pcnt_counter_clear(motor.pcntUnit);
     pcnt_counter_resume(motor.pcntUnit);
+
+    // Enable PCNT interrupt
+    pcnt_event_enable(motor.pcntUnit, PCNT_EVT_H_LIM);
+    pcnt_event_enable(motor.pcntUnit, PCNT_EVT_L_LIM);
+    pcnt_isr_service_install(0);
+    pcnt_isr_handler_add(motor.pcntUnit, pcntOverflowHandler, (void *)&motor);
+    pcnt_intr_enable(motor.pcntUnit);
 }
 
 float controlPID(PID &pid, float feedback) {
@@ -31,6 +52,8 @@ float controlPID(PID &pid, float feedback) {
     controlSignal = pid.kp * error + pid.ki * pid.accumulatedError + pid.kd * derivative;
 
     // Debugging prints
+    Serial.print("Current Time: ");
+    Serial.println(millis());
     Serial.print("Reference: ");
     Serial.println(pid.setpoint);
     Serial.print("Feedback: ");
@@ -58,11 +81,23 @@ void moveMotor(Motor &motor, bool dir1, bool dir2, int speed) {
 // Measure the speed of the motor
 void measureSpeed(Motor &motor) {
     unsigned long currentTime = millis();
-    pcnt_get_counter_value(motor.pcntUnit, (int16_t*)&motor.encoderPosition);
+    int16_t newPosition;
+    pcnt_get_counter_value(motor.pcntUnit, &newPosition);
+
+    // Handle overflow
+    if (newPosition < motor.lastEncoderPosition && motor.lastEncoderPosition + newPosition > 32767) {
+        motor.encoderPosition += (newPosition + 32767 - motor.lastEncoderPosition);
+    } else if (newPosition > motor.lastEncoderPosition && newPosition + motor.lastEncoderPosition < -32767) {
+        motor.encoderPosition -= (motor.lastEncoderPosition + 32767 - newPosition);
+    } else {
+        motor.encoderPosition += (newPosition - motor.lastEncoderPosition);
+    }
+
     motor.motorSpeed = (motor.encoderPosition - motor.lastEncoderPosition) / ((currentTime - motor.lastMeasurementTime) / 1000.0);
-    motor.lastEncoderPosition = motor.encoderPosition;
+    motor.lastEncoderPosition = newPosition;
     motor.lastMeasurementTime = currentTime;
 }
+
 
 void controlSpeedMotor(Motor &motor, int targetSpeed) {
     motor.pid.setpoint = targetSpeed;
@@ -71,7 +106,7 @@ void controlSpeedMotor(Motor &motor, int targetSpeed) {
     float controlSignal = controlPID(motor.pid, motor.motorSpeed);
     controlSignal = constrain(abs(controlSignal), motor.minPWM, motor.maxPWM);
 
-    if (controlSignal < 0) {
+    if (targetSpeed < 0) {
         moveMotor(motor, HIGH, LOW, controlSignal); // Forward direction
     } else {
         moveMotor(motor, LOW, HIGH, controlSignal); // Reverse direction

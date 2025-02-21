@@ -8,7 +8,7 @@ Motor motor1 = {
     M1_PWM_PIN,        // PWM control pin
     0,                 // PWM channel
     0,                 // Minimum PWM value
-    1023,               // Maximum PWM value
+    800,               // Maximum PWM value
     M1_ENCODER_PIN_A,  // Encoder A pin
     M1_ENCODER_PIN_B,  // Encoder B pin
     PCNT_UNIT_0,       // Pulse counter unit
@@ -19,7 +19,7 @@ Motor motor1 = {
     {                  // PID instance
         1.0,           // kp
         0.1,           // ki
-        0.01,          // kd
+        0.5,          // kd
         0,             // setpoint
         0,             // accumulatedError
         0              // previousError
@@ -43,7 +43,7 @@ Motor motor2 = {
     {                  // PID instance
         1.0,           // kp
         0.1,           // ki
-        0.01,          // kd
+        0.5,          // kd
         0,             // setpoint
         0,             // accumulatedError
         0              // previousError
@@ -74,7 +74,19 @@ void setup() {
 
 // ==================== MAIN LOOP ====================
 void loop() {
-    controlSpeedMotor(motor1, 500);
-    // controlSpeedMotor(motor2, 1000);
-    delay(100);
+    static unsigned long lastTimeM1 = 0;
+    static unsigned long lastTimeM2 = 0;
+
+    if (millis() - lastTimeM1 >= FREQUENCY) {
+        lastTimeM1 = millis();
+
+        // Control motor speed
+        // controlSpeedMotor(motor1, 100);
+    }
+    if (millis() - lastTimeM2 >= FREQUENCY) {
+        lastTimeM2 = millis();
+
+        // Control motor speed
+        controlSpeedMotor(motor2, -500);
+    }
 }

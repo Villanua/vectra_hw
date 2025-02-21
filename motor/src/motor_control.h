@@ -27,6 +27,8 @@
 #define PCNT_H_LIM 32767    // High limit for pulse counter
 #define PCNT_L_LIM -32767   // Low limit for pulse counter
 
+#define FREQUENCY 20      // Frequency of control loop (Hz)
+
 // ==================== PID STRUCTURE ====================
 struct PID {
     float kp;
